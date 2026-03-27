@@ -1,0 +1,40 @@
+name: Deploy to EKS
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v3
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      run: |
+        aws ecr get-login-password --region $AWS_REGION | \
+        docker login --username AWS --password-stdin 507660350427.dkr.ecr.us-east-1.amazonaws.com
+
+    - name: Build Docker Image
+      run: |
+        docker build -t flask-api .
+        docker tag flask-api:latest 507660350427.dkr.ecr.us-east-1.amazonaws.com/flask-api:latest
+        docker push 507660350427.dkr.ecr.us-east-1.amazonaws.com/flask-api:latest
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region $AWS_REGION --name ${{ secrets.EKS_CLUSTER_NAME }}
+
+    - name: Deploy to EKS
+      run: |
+        kubectl apply -f deployment.yaml
